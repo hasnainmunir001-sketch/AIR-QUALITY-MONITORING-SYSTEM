@@ -317,7 +317,7 @@ def render_predict(X, sup_models):
     st.header("🔮 Real-Time Pollution Prediction")
 
     with st.form("predict_form"):
-        st.write("Sensor values set karo. Baaki features dataset median pe default.")
+        st.write("Set the sensor values below. All other features default to the dataset median")
 
         c1, c2 = st.columns(2)
         with c1:
