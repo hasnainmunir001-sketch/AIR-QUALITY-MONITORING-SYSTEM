@@ -1,5 +1,6 @@
 import os
 import sys
+import tempfile
 import pandas as pd
 import numpy as np
 import streamlit as st
@@ -41,8 +42,24 @@ UCI_CSV = "data/AirQualityUCI.csv"
 
 
 @st.cache_data(show_spinner="Fetching & cleaning dataset...")
-def get_data():
-    df = load_and_clean(UCI_CSV)
+def get_data(csv_source, cache_key):
+    """csv_source: a file path (str) or an uploaded-file-like object.
+    cache_key is just used to invalidate the Streamlit cache per uploaded file."""
+    if isinstance(csv_source, str):
+        df = load_and_clean(csv_source)
+    else:
+        # Uploaded file from st.file_uploader: save to a temp path first,
+        # in case load_and_clean expects a file path rather than a buffer.
+        with tempfile.NamedTemporaryFile(
+            suffix=".csv", delete=False
+        ) as tmp:
+            tmp.write(csv_source.getvalue())
+            tmp_path = tmp.name
+        try:
+            df = load_and_clean(tmp_path)
+        finally:
+            os.remove(tmp_path)
+
     df = engineer_features(df)
     X, y = get_feature_target(df)
 
@@ -66,7 +83,7 @@ def get_trained_models(X_train, y_train, X_test, y_test, feature_names):
 
 
 def align_clusters(y_true, y_pred):
-    """Hungarian algorithm se clusters ko labels map kare."""
+    """Map clusters to labels using the Hungarian algorithm."""
     y_true = pd.Series(y_true).astype(str).reset_index(drop=True)
     y_pred = pd.Series(y_pred).reset_index(drop=True)
 
@@ -132,17 +149,25 @@ def metrics_table(sup_models, semi, X_test, y_test):
 
 
 def main():
-    df, X, y, y_class = get_data()
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y_class, test_size=0.2, stratify=y_class, random_state=42
-    )
-    feature_names = list(X.columns)
-    sup_models, kmeans, semi = get_trained_models(
-        X_train, y_train, X_test, y_test, feature_names
-    )
-
     with st.sidebar:
         st.markdown("## 🌍 Air Quality AI")
+
+        uploaded_file = st.file_uploader(
+            "Upload your own CSV (optional)",
+            type=["csv"],
+            help="If you don't upload a file, the default UCI Air Quality "
+            "dataset bundled with the app will be used.",
+        )
+
+        if uploaded_file is not None:
+            csv_source = uploaded_file
+            cache_key = uploaded_file.name + str(uploaded_file.size)
+            st.success(f"Using uploaded file: {uploaded_file.name}")
+        else:
+            csv_source = UCI_CSV
+            cache_key = UCI_CSV
+
+        st.markdown("---")
         menu = st.radio(
             "Menu",
             [
@@ -157,6 +182,24 @@ def main():
         )
         st.markdown("---")
         st.caption("UCI Air Quality dataset")
+
+    try:
+        df, X, y, y_class = get_data(csv_source, cache_key)
+    except Exception as e:
+        st.error(
+            f"Couldn't process the uploaded CSV: {e}\n\n"
+            "Please check that the file matches the expected UCI Air "
+            "Quality dataset format, then try again."
+        )
+        st.stop()
+
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y_class, test_size=0.2, stratify=y_class, random_state=42
+    )
+    feature_names = list(X.columns)
+    sup_models, kmeans, semi = get_trained_models(
+        X_train, y_train, X_test, y_test, feature_names
+    )
 
     if menu == "🏠 Home":
         render_home(df, X, y_class, sup_models)
@@ -317,7 +360,7 @@ def render_predict(X, sup_models):
     st.header("🔮 Real-Time Pollution Prediction")
 
     with st.form("predict_form"):
-        st.write("Set the sensor values below. All other features default to the dataset median")
+        st.write("Set the sensor values below. All other features default to the dataset median.")
 
         c1, c2 = st.columns(2)
         with c1:
