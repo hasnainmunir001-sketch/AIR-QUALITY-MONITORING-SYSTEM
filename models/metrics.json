@@ -1,0 +1,29 @@
+{
+  "supervised": {
+    "Random Forest": {
+      "accuracy": 1.0,
+      "precision_macro": 1.0,
+      "recall_macro": 1.0,
+      "f1_macro": 1.0
+    },
+    "Support Vector Machine": {
+      "accuracy": 0.9605336297943302,
+      "precision_macro": 0.9604525805573071,
+      "recall_macro": 0.9603258484808183,
+      "f1_macro": 0.9603292121601991
+    },
+    "Neural Network (MLP)": {
+      "accuracy": 0.9822123401889938,
+      "precision_macro": 0.9821592245009233,
+      "recall_macro": 0.9821546929835275,
+      "f1_macro": 0.9821370595769968
+    }
+  },
+  "semi_supervised": {
+    "accuracy": 0.9310728182323513,
+    "precision_macro": 0.930514265220797,
+    "recall_macro": 0.9305653945222062,
+    "f1_macro": 0.9305211973385794
+  },
+  "kmeans_ari": 0.3557734418201171
+}
