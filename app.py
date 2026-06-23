@@ -67,11 +67,26 @@ def get_trained_models(X_train, y_train, X_test, y_test, feature_names):
 
 def align_clusters(y_true, y_pred):
     """Hungarian algorithm se clusters ko labels map kare."""
-    labels = sorted(y_true.unique())
-    cm = sk_confusion_matrix(y_true, y_pred, labels=labels)
+    y_true = pd.Series(y_true).astype(str).reset_index(drop=True)
+    y_pred = pd.Series(y_pred).reset_index(drop=True)
+
+    cluster_ids = sorted(y_pred.unique())
+    true_labels = sorted(y_true.unique())
+
+    # Build the confusion matrix manually so row/col index spaces can differ
+    # (true labels are strings like "Low"/"Medium"/"High"; cluster ids are ints).
+    cm = np.zeros((len(cluster_ids), len(true_labels)), dtype=int)
+    cluster_pos = {c: i for i, c in enumerate(cluster_ids)}
+    label_pos = {l: j for j, l in enumerate(true_labels)}
+    for c, t in zip(y_pred, y_true):
+        cm[cluster_pos[c], label_pos[t]] += 1
+
     row_ind, col_ind = linear_sum_assignment(-cm)
-    mapping = {int(col_ind[i]): labels[row_ind[i]] for i in range(len(row_ind))}
-    mapped = pd.Series(y_pred).map(mapping)
+    mapping = {
+        int(cluster_ids[row_ind[i]]): true_labels[col_ind[i]]
+        for i in range(len(row_ind))
+    }
+    mapped = y_pred.map(mapping)
     return mapped, cm, mapping
 
 
