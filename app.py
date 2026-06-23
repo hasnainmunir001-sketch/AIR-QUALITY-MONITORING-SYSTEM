@@ -93,7 +93,12 @@ def get_trained_models(X_train, y_train, X_test, y_test, feature_names):
 def align_clusters(y_true, y_pred):
     """Hungarian algorithm se clusters ko labels map kare."""
     labels = sorted(y_true.unique())
-    cm = sk_confusion_matrix(y_true, y_pred, labels=labels)
+    
+    # Convert both to numeric to avoid string/number mix error
+    y_true_numeric = pd.Series(y_true).astype("category").cat.codes
+    y_pred_numeric = pd.Series(y_pred).astype(int)
+    
+    cm = sk_confusion_matrix(y_true_numeric, y_pred_numeric, labels=range(len(labels)))
     row_ind, col_ind = linear_sum_assignment(-cm)
     mapping = {col_ind[i]: labels[row_ind[i]] for i in range(len(row_ind))}
     mapped = pd.Series(y_pred).map(mapping)
