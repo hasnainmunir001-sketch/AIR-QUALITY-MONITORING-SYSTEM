@@ -7,6 +7,7 @@ import plotly.express as px
 from sklearn.model_selection import train_test_split
 from sklearn.decomposition import PCA
 from sklearn.metrics import confusion_matrix as sk_confusion_matrix
+from sklearn.metrics import adjusted_rand_score
 from scipy.optimize import linear_sum_assignment
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -40,9 +41,33 @@ st.markdown(
 UCI_CSV = "data/AirQualityUCI.csv"
 
 
-@st.cache_data(show_spinner="Fetching & cleaning dataset...")
-def get_data():
-    df = load_and_clean(UCI_CSV)
+def clean_csv(df):
+    """User uploaded CSV ko clean kare."""
+    df.replace(-200, np.nan, inplace=True)
+    target = "C6H6(GT)"
+    if target in df.columns:
+        df[target] = pd.to_numeric(df[target], errors="coerce")
+    if "Date" in df.columns and "Time" in df.columns:
+        df["DateTime"] = pd.to_datetime(
+            df["Date"].astype(str) + " " + df["Time"].astype(str),
+            format="%d/%m/%Y %H.%M.%S",
+            errors="coerce",
+        )
+        df.dropna(subset=[target, "DateTime"], inplace=True)
+    return df
+
+
+@st.cache_data(show_spinner="Loading dataset...")
+def get_data(uploaded_file=None):
+    if uploaded_file is not None:
+        df = pd.read_csv(uploaded_file, sep=";", decimal=",")
+        df = df.loc[:, ~df.columns.str.contains("^Unnamed")]
+        df = clean_csv(df)
+        st.success("✅ Uploaded CSV loaded successfully!")
+    else:
+        df = load_and_clean(UCI_CSV)
+        st.info("ℹ️ Using UCI Air Quality dataset")
+    
     df = engineer_features(df)
     X, y = get_feature_target(df)
 
@@ -117,17 +142,25 @@ def metrics_table(sup_models, semi, X_test, y_test):
 
 
 def main():
-    df, X, y, y_class = get_data()
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y_class, test_size=0.2, stratify=y_class, random_state=42
-    )
-    feature_names = list(X.columns)
-    sup_models, kmeans, semi = get_trained_models(
-        X_train, y_train, X_test, y_test, feature_names
-    )
-
     with st.sidebar:
         st.markdown("## 🌍 Air Quality AI")
+        st.markdown("---")
+        
+        # ✅ CSV Upload Feature
+        st.subheader("📁 Upload Dataset")
+        uploaded_file = st.file_uploader(
+            "Upload AirQualityUCI.csv",
+            type=["csv"],
+            help="Upload UCI Air Quality CSV. If not uploaded, dataset will be downloaded from UCI."
+        )
+        
+        if uploaded_file is None:
+            st.info("Using UCI dataset")
+        else:
+            st.success("Using uploaded file")
+        
+        st.markdown("---")
+        
         menu = st.radio(
             "Menu",
             [
@@ -142,6 +175,15 @@ def main():
         )
         st.markdown("---")
         st.caption("UCI Air Quality dataset")
+
+    df, X, y, y_class = get_data(uploaded_file)
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y_class, test_size=0.2, stratify=y_class, random_state=42
+    )
+    feature_names = list(X.columns)
+    sup_models, kmeans, semi = get_trained_models(
+        X_train, y_train, X_test, y_test, feature_names
+    )
 
     if menu == "🏠 Home":
         render_home(df, X, y_class, sup_models)
@@ -431,7 +473,7 @@ def render_unsupervised(kmeans, X_train, y_train, X_test, y_test):
 
     clusters_train = kmeans.predict(X_train)
     mapped_train, cm, mapping = align_clusters(y_train, clusters_train)
-    ari = evaluation.adjusted_rand_score(y_test, kmeans.predict(X_test))
+    ari = adjusted_rand_score(y_test, kmeans.predict(X_test))
 
     st.metric("Adjusted Rand Index (test)", f"{ari:.3f}")
     st.write("Cluster-to-label mapping (Hungarian alignment):", mapping)
